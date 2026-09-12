@@ -50,7 +50,7 @@
         <double>1.000000000000000</double>
        </property>
        <property name="maximum">
-        <double>72.000000000000000</double>
+        <double>10000.000000000000000</double>
        </property>
        <property name="value">
         <double>12.000000000000000</double>
