@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #ifndef LIBCLIENT_TOOLS_SELECTION_H
 #define LIBCLIENT_TOOLS_SELECTION_H
-#include "libclient/drawdance/brushengine.h"
 #include "libclient/net/message.h"
 #include "libclient/tools/clickdetector.h"
 #include "libclient/tools/tool.h"
@@ -10,7 +9,6 @@
 #include <QPolygonF>
 #include <QRect>
 #include <QRectF>
-#include <QTimer>
 
 class QPainterPath;
 
@@ -51,6 +49,11 @@ protected:
 
 	void updateSelectionPreview(const QPainterPath &path) const;
 	void removeSelectionPreview() const;
+
+	ClickDetector &clickDetector() { return m_clickDetector; }
+	void setOperation(int operation) { m_op = operation; }
+	void setStartPoint(const QPointF &point) { m_startPoint = point; }
+	void setZoom(qreal zoom) { m_zoom = zoom; }
 
 	virtual const QCursor &getCursor(int effectiveOp) const = 0;
 	virtual void beginSelection(const canvas::Point &point) = 0;
@@ -100,6 +103,10 @@ class PolygonSelection final : public SelectionTool {
 public:
 	PolygonSelection(ToolController &owner);
 
+	void begin(const BeginParams &params) override;
+	void motion(const MotionParams &params) override;
+	void end(const EndParams &params) override;
+
 	void setStabilizationParams(
 		int stabilizationMode, int stabilizerSampleCount, int smoothing);
 
@@ -112,17 +119,10 @@ protected:
 	net::MessageList endSelection(uint8_t contextId) override;
 
 private:
-	int getEffectiveStabilizerSampleCount() const;
-	int getEffectiveSmoothing() const;
-
 	void addPoint(const QPointF &point);
-	void pollControl(bool enable);
-	void poll();
 	void updatePolygonSelectionPreview();
 
-	QTimer m_pollTimer;
-	drawdance::StrokeEngine m_strokeEngine;
-	long long m_lastTimeMsec = 0LL;
+	QPointF m_cursorPoint;
 	QPolygon m_polygon;
 	QPolygonF m_polygonF;
 	int m_stabilizationMode = 0;
