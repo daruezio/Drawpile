@@ -4,12 +4,9 @@
 #include "libclient/canvas/selectionmodel.h"
 #include "libclient/net/client.h"
 #include "libclient/utils/cursors.h"
-#include <QDateTime>
 #include <QPainter>
 #include <QPainterPath>
-#include <functional>
 
-using std::placeholders::_1;
 using utils::Cursors;
 
 namespace tools {
@@ -224,12 +221,6 @@ bool SelectionTool::isInsideSelection(const QPointF &point, bool *atEdge) const
 							.toPoint();
 					return q != p && isInside(q) != inside;
 				};
-				// Determine if we're at an edge by sampling points around the
-				// cursor. If we're inside the selection and find a point
-				// outside of it or vice-versa, we consider it an edge. An
-				// exception here is if the cursor is inside the selection and
-				// there's two points opposite of each other that are outside,
-				// this must be a very narrow selection and isn't an edge.
 				if(inside) {
 					for(int angle = 0; angle < 180; angle += 45) {
 						if(compareAtAngle(angle)) {
@@ -399,18 +390,44 @@ QRectF RectangleSelection::getRectF() const
 
 PolygonSelection::PolygonSelection(ToolController &owner)
 	: SelectionTool(owner, POLYGONSELECTION, Cursors::selectLasso())
-	, m_strokeEngine(
-		  [this](DP_BrushPoint bp, const drawdance::CanvasState &) {
-			  addPoint(QPointF(bp.x, bp.y));
-		  },
-		  std::bind(&PolygonSelection::pollControl, this, _1))
 {
-	m_pollTimer.setSingleShot(false);
-	m_pollTimer.setTimerType(Qt::PreciseTimer);
-	m_pollTimer.setInterval(15);
-	QObject::connect(&m_pollTimer, &QTimer::timeout, [this]() {
-		poll();
-	});
+}
+
+void PolygonSelection::begin(const BeginParams &params)
+{
+	if(!isMultipart()) {
+		SelectionTool::begin(params);
+		return;
+	}
+
+	clickDetector().begin(params.viewPos, params.deviceType);
+	setZoom(params.zoom);
+	addPoint(QPointF(params.point.x(), params.point.y()));
+	setCursor(getCursor(op()));
+}
+
+void PolygonSelection::motion(const MotionParams &params)
+{
+	if(!isMultipart()) {
+		return;
+	}
+
+	clickDetector().motion(params.viewPos);
+	m_cursorPoint = QPointF(params.point.x(), params.point.y());
+	updatePolygonSelectionPreview();
+}
+
+void PolygonSelection::end(const EndParams &params)
+{
+	Q_UNUSED(params);
+	if(!isMultipart()) {
+		return;
+	}
+
+	clickDetector().end();
+	if(clickDetector().clicks() >= 2) {
+		finishMultipart();
+	}
 }
 
 void PolygonSelection::setStabilizationParams(
@@ -439,18 +456,14 @@ void PolygonSelection::beginSelection(const canvas::Point &point)
 {
 	m_polygon.clear();
 	m_polygonF.clear();
-	m_lastTimeMsec = point.timeMsec();
-	m_owner.setStrokeEngineParams(
-		m_strokeEngine, getEffectiveStabilizerSampleCount(),
-		getEffectiveSmoothing());
-	m_strokeEngine.beginStroke(zoom());
-	m_strokeEngine.strokeTo(point, drawdance::CanvasState::null());
+	m_cursorPoint = QPointF(point.x(), point.y());
+	addPoint(m_cursorPoint);
 }
 
 void PolygonSelection::continueSelection(const canvas::Point &point)
 {
-	m_lastTimeMsec = point.timeMsec();
-	m_strokeEngine.strokeTo(point, drawdance::CanvasState::null());
+	m_cursorPoint = QPointF(point.x(), point.y());
+	updatePolygonSelectionPreview();
 }
 
 void PolygonSelection::offsetSelection(const QPoint &offset)
@@ -460,32 +473,26 @@ void PolygonSelection::offsetSelection(const QPoint &offset)
 	} else {
 		m_polygon.translate(offset);
 	}
+	m_cursorPoint += offset;
 	updatePolygonSelectionPreview();
 }
 
 void PolygonSelection::cancelSelection()
 {
-	m_strokeEngine.endStroke(m_lastTimeMsec, drawdance::CanvasState::null());
+	m_polygon.clear();
+	m_polygonF.clear();
 	removeSelectionPreview();
+	emit m_owner.statusTextRequested(QString());
 }
 
 net::MessageList PolygonSelection::endSelection(uint8_t contextId)
 {
-	int pointCount = antiAlias() ? m_polygonF.size() : m_polygon.size();
-	if(pointCount != 0) {
-		m_strokeEngine.strokeTo(
-			canvas::Point(
-				m_lastTimeMsec,
-				antiAlias() ? m_polygonF.first() : QPointF(m_polygon.first()),
-				1.0),
-			drawdance::CanvasState::null());
-	}
-
-	m_strokeEngine.endStroke(m_lastTimeMsec, drawdance::CanvasState::null());
 	removeSelectionPreview();
+	emit m_owner.statusTextRequested(QString());
 
+	int pointCount = antiAlias() ? m_polygonF.size() : m_polygon.size();
 	QRect area;
-	if(pointCount >= 2) {
+	if(pointCount >= 3) {
 		if(antiAlias()) {
 			QRectF bounds = m_polygonF.boundingRect();
 			area = bounds.toAlignedRect();
@@ -519,18 +526,6 @@ net::MessageList PolygonSelection::endSelection(uint8_t contextId)
 	}
 }
 
-int PolygonSelection::getEffectiveStabilizerSampleCount() const
-{
-	return m_stabilizationMode == int(brushes::Stabilizer)
-			   ? m_stabilizerSampleCount
-			   : 0;
-}
-
-int PolygonSelection::getEffectiveSmoothing() const
-{
-	return m_stabilizationMode == int(brushes::Smoothing) ? m_smoothing : 0;
-}
-
 void PolygonSelection::addPoint(const QPointF &point)
 {
 	if(antiAlias()) {
@@ -548,31 +543,28 @@ void PolygonSelection::addPoint(const QPointF &point)
 	}
 }
 
-void PolygonSelection::pollControl(bool enable)
-{
-	if(enable) {
-		m_pollTimer.start();
-	} else {
-		m_pollTimer.stop();
-	}
-}
-
-void PolygonSelection::poll()
-{
-	m_strokeEngine.poll(
-		QDateTime::currentMSecsSinceEpoch(), drawdance::CanvasState::null());
-}
-
 void PolygonSelection::updatePolygonSelectionPreview()
 {
 	QPainterPath path;
 	if(antiAlias()) {
-		if(m_polygonF.size() >= 2) {
-			path.addPolygon(m_polygonF);
+		if(m_polygonF.size() >= 1) {
+			path.moveTo(m_polygonF.first());
+			for(int i = 1; i < m_polygonF.size(); ++i) {
+				path.lineTo(m_polygonF.at(i));
+			}
+			if(!m_cursorPoint.isNull()) {
+				path.lineTo(m_cursorPoint);
+			}
 		}
 	} else {
-		if(m_polygon.size() >= 2) {
-			path.addPolygon(m_polygon);
+		if(m_polygon.size() >= 1) {
+			path.moveTo(m_polygon.first());
+			for(int i = 1; i < m_polygon.size(); ++i) {
+				path.lineTo(m_polygon.at(i));
+			}
+			if(!m_cursorPoint.isNull()) {
+				path.lineTo(m_cursorPoint);
+			}
 		}
 	}
 
