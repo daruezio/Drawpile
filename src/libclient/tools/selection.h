@@ -1,16 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #ifndef LIBCLIENT_TOOLS_SELECTION_H
 #define LIBCLIENT_TOOLS_SELECTION_H
-#include "libclient/drawdance/brushengine.h"
-#include "libclient/net/message.h"
-#include "libclient/tools/clickdetector.h"
 #include "libclient/tools/tool.h"
 #include "libclient/tools/toolcontroller.h"
 #include <QPolygon>
 #include <QPolygonF>
 #include <QRect>
 #include <QRectF>
-#include <QTimer>
 
 class QPainterPath;
 
@@ -57,13 +53,15 @@ protected:
 	virtual void continueSelection(const canvas::Point &point) = 0;
 	virtual void offsetSelection(const QPoint &offset) = 0;
 	virtual void cancelSelection() = 0;
-	virtual net::MessageList endSelection(uint8_t contextId) = 0;
+	net::MessageList endSelection(uint8_t contextId);
+	virtual net::MessageList createSelection(uint8_t contextId) = 0;
+	virtual bool keepOpenOnClick() const { return false; }
+	virtual void handleClickEnd(const EndParams &params) { Q_UNUSED(params); }
 
 private:
 	static constexpr qreal EDGE_SLOP = 5.0;
 
 	void updateCursor(const QPointF &point, bool constrain, bool center);
-	void endSelection(bool click, bool onlyMask);
 	net::MessageList endDeselection(uint8_t contextId);
 	bool isInsideSelection(const QPointF &point, bool *atEdge = nullptr) const;
 
@@ -86,7 +84,7 @@ protected:
 	void continueSelection(const canvas::Point &point) override;
 	void offsetSelection(const QPoint &offset) override;
 	void cancelSelection() override;
-	net::MessageList endSelection(uint8_t contextId) override;
+	net::MessageList createSelection(uint8_t contextId) override;
 
 private:
 	void updateRectangleSelectionPreview();
@@ -100,34 +98,24 @@ class PolygonSelection final : public SelectionTool {
 public:
 	PolygonSelection(ToolController &owner);
 
-	void setStabilizationParams(
-		int stabilizationMode, int stabilizerSampleCount, int smoothing);
-
 protected:
 	virtual const QCursor &getCursor(int effectiveOp) const override;
 	void beginSelection(const canvas::Point &point) override;
 	void continueSelection(const canvas::Point &point) override;
 	void offsetSelection(const QPoint &offset) override;
 	void cancelSelection() override;
-	net::MessageList endSelection(uint8_t contextId) override;
+	net::MessageList createSelection(uint8_t contextId) override;
+	bool keepOpenOnClick() const override { return true; }
+	void handleClickEnd(const EndParams &params) override;
 
 private:
-	int getEffectiveStabilizerSampleCount() const;
-	int getEffectiveSmoothing() const;
-
 	void addPoint(const QPointF &point);
-	void pollControl(bool enable);
-	void poll();
 	void updatePolygonSelectionPreview();
+	bool shouldClose() const;
 
-	QTimer m_pollTimer;
-	drawdance::StrokeEngine m_strokeEngine;
-	long long m_lastTimeMsec = 0LL;
 	QPolygon m_polygon;
 	QPolygonF m_polygonF;
-	int m_stabilizationMode = 0;
-	int m_stabilizerSampleCount = 0;
-	int m_smoothing = 0;
+	QPointF m_cursorPoint;
 };
 
 }
