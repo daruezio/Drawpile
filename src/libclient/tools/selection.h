@@ -109,6 +109,8 @@ public:
 
 	void setStabilizationParams(
 		int stabilizationMode, int stabilizerSampleCount, int smoothing);
+	void setFreehandMode(bool freehand) { m_freehandMode = freehand; }
+	bool freehandMode() const { return m_freehandMode; }
 
 protected:
 	virtual const QCursor &getCursor(int effectiveOp) const override;
@@ -128,6 +130,7 @@ private:
 	int m_stabilizationMode = 0;
 	int m_stabilizerSampleCount = 0;
 	int m_smoothing = 0;
+	bool m_freehandMode = false;
 };
 
 }
