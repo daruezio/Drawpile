@@ -14,6 +14,8 @@ extern "C" {
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QMetaObject>
+#include <QPainterPath>
+#include <QtMath>
 
 using std::placeholders::_1;
 
@@ -98,9 +100,24 @@ Freehand::Freehand(ToolController &owner, DP_MaskSync *ms)
 	, m_strokeWorker(
 		  ms, std::bind(&Freehand::pushMessage, this, _1),
 		  std::bind(&Freehand::pollControl, this, _1),
-		  std::bind(&Freehand::sync, this))
+		  [this] { return sync(m_sem); })
+	, m_verticalStrokeWorker(
+		  ms, std::bind(&Freehand::pushMessage, this, _1),
+		  std::bind(&Freehand::pollControl, this, _1),
+		  [this] { return sync(m_verticalSem); })
+	, m_horizontalStrokeWorker(
+		  ms, std::bind(&Freehand::pushMessage, this, _1),
+		  std::bind(&Freehand::pollControl, this, _1),
+		  [this] { return sync(m_horizontalSem); })
+	, m_bothStrokeWorker(
+		  ms, std::bind(&Freehand::pushMessage, this, _1),
+		  std::bind(&Freehand::pollControl, this, _1),
+		  [this] { return sync(m_bothSem); })
 	, m_mutex(DP_mutex_new())
 	, m_sem(DP_semaphore_new(0))
+	, m_verticalSem(DP_semaphore_new(0))
+	, m_horizontalSem(DP_semaphore_new(0))
+	, m_bothSem(DP_semaphore_new(0))
 {
 	QObject::connect(
 		&m_owner, &ToolController::freehandMessagesAvailable, &m_owner,
@@ -115,6 +132,9 @@ Freehand::Freehand(ToolController &owner, DP_MaskSync *ms)
 
 Freehand::~Freehand()
 {
+	DP_semaphore_free(m_bothSem);
+	DP_semaphore_free(m_horizontalSem);
+	DP_semaphore_free(m_verticalSem);
 	DP_semaphore_free(m_sem);
 	DP_mutex_free(m_mutex);
 }
@@ -179,8 +199,34 @@ void Freehand::beginStroke(const BeginParams &params, SnapToPixelToggle *target)
 	// queued connection. So don't change this without considering that.
 	m_cancelling = true;
 	cancelStroke();
+	m_verticalStrokeActive =
+		m_symmetryMode == SymmetryMode::Vertical ||
+		m_symmetryMode == SymmetryMode::Both;
+	m_horizontalStrokeActive =
+		m_symmetryMode == SymmetryMode::Horizontal ||
+		m_symmetryMode == SymmetryMode::Both;
+	m_bothStrokeActive = m_symmetryMode == SymmetryMode::Both;
+	if(m_symmetryMode != SymmetryMode::Off) {
+		ensureSymmetryCenter();
+	}
+
 	m_owner.setStrokeWorkerBrush(
 		m_strokeWorker, type(), floodLc, floodTolerance, floodExpand, color);
+	if(m_verticalStrokeActive) {
+		m_owner.setStrokeWorkerBrush(
+			m_verticalStrokeWorker, type(), floodLc, floodTolerance, floodExpand,
+			color);
+	}
+	if(m_horizontalStrokeActive) {
+		m_owner.setStrokeWorkerBrush(
+			m_horizontalStrokeWorker, type(), floodLc, floodTolerance,
+			floodExpand, color);
+	}
+	if(m_bothStrokeActive) {
+		m_owner.setStrokeWorkerBrush(
+			m_bothStrokeWorker, type(), floodLc, floodTolerance, floodExpand,
+			color);
+	}
 	m_cancelling = false;
 
 	// The pressure value of the first point is unreliable
@@ -215,6 +261,13 @@ void Freehand::hold(const MotionParams &params)
 	}
 }
 
+void Freehand::hover(const HoverParams &params)
+{
+	m_lastHoverPoint = params.point;
+	m_haveHoverPoint = true;
+	updateSymmetryGuide();
+}
+
 void Freehand::strokeTo(const canvas::Point &point)
 {
 	Q_ASSERT(m_drawing);
@@ -227,10 +280,47 @@ void Freehand::strokeTo(const canvas::Point &point)
 			localUserId(), canvasState, isCompatibilityMode(), true, m_mirror,
 			m_flip, m_zoom, m_angle);
 		m_strokeWorker.strokeTo(m_start, canvasState);
+
+		if(m_verticalStrokeActive) {
+			m_verticalStrokeWorker.beginStroke(
+				localUserId(), canvasState, isCompatibilityMode(), false,
+				m_mirror, m_flip, m_zoom, m_angle);
+			m_verticalStrokeWorker.strokeTo(
+				symmetryPoint(m_start, true, false), canvasState);
+		}
+		if(m_horizontalStrokeActive) {
+			m_horizontalStrokeWorker.beginStroke(
+				localUserId(), canvasState, isCompatibilityMode(), false,
+				m_mirror, m_flip, m_zoom, m_angle);
+			m_horizontalStrokeWorker.strokeTo(
+				symmetryPoint(m_start, false, true), canvasState);
+		}
+		if(m_bothStrokeActive) {
+			m_bothStrokeWorker.beginStroke(
+				localUserId(), canvasState, isCompatibilityMode(), false,
+				m_mirror, m_flip, m_zoom, m_angle);
+			m_bothStrokeWorker.strokeTo(
+				symmetryPoint(m_start, true, true), canvasState);
+		}
 	}
 
 	m_strokeWorker.strokeTo(point, canvasState);
 	m_strokeWorker.flushDabs();
+	if(m_verticalStrokeActive) {
+		m_verticalStrokeWorker.strokeTo(
+			symmetryPoint(point, true, false), canvasState);
+		m_verticalStrokeWorker.flushDabs();
+	}
+	if(m_horizontalStrokeActive) {
+		m_horizontalStrokeWorker.strokeTo(
+			symmetryPoint(point, false, true), canvasState);
+		m_horizontalStrokeWorker.flushDabs();
+	}
+	if(m_bothStrokeActive) {
+		m_bothStrokeWorker.strokeTo(
+			symmetryPoint(point, true, true), canvasState);
+		m_bothStrokeWorker.flushDabs();
+	}
 }
 
 void Freehand::end(const EndParams &)
@@ -246,10 +336,41 @@ void Freehand::end(const EndParams &)
 				localUserId(), canvasState, isCompatibilityMode(), true,
 				m_mirror, m_flip, m_zoom, m_angle);
 			m_strokeWorker.strokeTo(m_start, canvasState);
+
+			if(m_verticalStrokeActive) {
+				m_verticalStrokeWorker.beginStroke(
+					localUserId(), canvasState, isCompatibilityMode(), false,
+					m_mirror, m_flip, m_zoom, m_angle);
+				m_verticalStrokeWorker.strokeTo(
+					symmetryPoint(m_start, true, false), canvasState);
+			}
+			if(m_horizontalStrokeActive) {
+				m_horizontalStrokeWorker.beginStroke(
+					localUserId(), canvasState, isCompatibilityMode(), false,
+					m_mirror, m_flip, m_zoom, m_angle);
+				m_horizontalStrokeWorker.strokeTo(
+					symmetryPoint(m_start, false, true), canvasState);
+			}
+			if(m_bothStrokeActive) {
+				m_bothStrokeWorker.beginStroke(
+					localUserId(), canvasState, isCompatibilityMode(), false,
+					m_mirror, m_flip, m_zoom, m_angle);
+				m_bothStrokeWorker.strokeTo(
+					symmetryPoint(m_start, true, true), canvasState);
+			}
 		}
 
-		m_strokeWorker.endStroke(
-			QDateTime::currentMSecsSinceEpoch(), canvasState, true);
+		long long timeMsec = QDateTime::currentMSecsSinceEpoch();
+		m_strokeWorker.endStroke(timeMsec, canvasState, true);
+		if(m_verticalStrokeActive) {
+			m_verticalStrokeWorker.endStroke(timeMsec, canvasState, true);
+		}
+		if(m_horizontalStrokeActive) {
+			m_horizontalStrokeWorker.endStroke(timeMsec, canvasState, true);
+		}
+		if(m_bothStrokeActive) {
+			m_bothStrokeWorker.endStroke(timeMsec, canvasState, true);
+		}
 	}
 }
 
@@ -263,16 +384,41 @@ bool Freehand::undoRedo(bool redo)
 void Freehand::offsetActiveTool(int x, int y)
 {
 	m_strokeWorker.addOffset(x, y);
+	m_verticalStrokeWorker.addOffset(x, y);
+	m_horizontalStrokeWorker.addOffset(x, y);
+	m_bothStrokeWorker.addOffset(x, y);
+	if(m_symmetryCenterInitialized) {
+		m_symmetryCenter += QPointF(x, y);
+	}
+	if(m_haveHoverPoint) {
+		m_lastHoverPoint += QPointF(x, y);
+	}
+	updateSymmetryGuide();
 }
 
 void Freehand::setBrushSizeLimit(int limit)
 {
 	m_strokeWorker.setSizeLimit(limit);
+	m_verticalStrokeWorker.setSizeLimit(limit);
+	m_horizontalStrokeWorker.setSizeLimit(limit);
+	m_bothStrokeWorker.setSizeLimit(limit);
 }
 
 void Freehand::setSelectionMaskingEnabled(bool selectionMaskingEnabled)
 {
 	setCapability(Capability::IgnoresSelections, !selectionMaskingEnabled);
+}
+
+void Freehand::finishWorker(
+	drawdance::StrokeWorker &worker, DP_Semaphore *sem, bool wait)
+{
+	if(worker.isThreadActive()) {
+		DP_SEMAPHORE_MUST_POST(sem);
+		worker.finishThread();
+		if(wait) {
+			DP_SEMAPHORE_MUST_WAIT(sem);
+		}
+	}
 }
 
 void Freehand::finish()
@@ -282,6 +428,9 @@ void Freehand::finish()
 	DP_SEMAPHORE_MUST_POST(m_sem);
 	m_strokeWorker.finishThread();
 	DP_SEMAPHORE_MUST_WAIT(m_sem);
+	finishWorker(m_verticalStrokeWorker, m_verticalSem, true);
+	finishWorker(m_horizontalStrokeWorker, m_horizontalSem, true);
+	finishWorker(m_bothStrokeWorker, m_bothSem, true);
 	m_cancelling = false;
 }
 
@@ -291,6 +440,9 @@ void Freehand::dispose()
 	cancelStroke();
 	DP_SEMAPHORE_MUST_POST(m_sem);
 	m_strokeWorker.finishThread();
+	finishWorker(m_verticalStrokeWorker, m_verticalSem, false);
+	finishWorker(m_horizontalStrokeWorker, m_horizontalSem, false);
+	finishWorker(m_bothStrokeWorker, m_bothSem, false);
 }
 
 void Freehand::setSnapToPixel(bool snapToPixel)
@@ -298,9 +450,108 @@ void Freehand::setSnapToPixel(bool snapToPixel)
 	setCapability(Capability::SnapsToPixel, snapToPixel);
 }
 
+void Freehand::setSymmetryMode(SymmetryMode mode)
+{
+	if(m_symmetryMode == mode) {
+		return;
+	}
+	m_symmetryMode = mode;
+	if(mode != SymmetryMode::Off) {
+		ensureSymmetryCenter();
+	}
+	updateSymmetryGuide();
+}
+
+void Freehand::setSymmetryCenterToCursor()
+{
+	if(m_haveHoverPoint) {
+		m_symmetryCenter = m_lastHoverPoint;
+		m_symmetryCenterInitialized = true;
+	} else {
+		ensureSymmetryCenter();
+	}
+	updateSymmetryGuide();
+}
+
+void Freehand::setSymmetryGuidesVisible(bool visible)
+{
+	if(m_symmetryGuidesVisible != visible) {
+		m_symmetryGuidesVisible = visible;
+		updateSymmetryGuide();
+	}
+}
+
+void Freehand::ensureSymmetryCenter()
+{
+	if(!m_symmetryCenterInitialized) {
+		canvas::CanvasModel *model = m_owner.model();
+		if(model) {
+			QSize size = model->size();
+			m_symmetryCenter =
+				QPointF(qreal(size.width()) / 2.0, qreal(size.height()) / 2.0);
+		} else {
+			m_symmetryCenter = m_haveHoverPoint ? m_lastHoverPoint : QPointF();
+		}
+		m_symmetryCenterInitialized = true;
+	}
+}
+
+void Freehand::updateSymmetryGuide()
+{
+	QPainterPath path;
+	if(m_symmetryMode != SymmetryMode::Off && m_symmetryGuidesVisible) {
+		ensureSymmetryCenter();
+		canvas::CanvasModel *model = m_owner.model();
+		if(model) {
+			QSize size = model->size();
+			if(m_symmetryMode == SymmetryMode::Vertical ||
+			   m_symmetryMode == SymmetryMode::Both) {
+				path.moveTo(m_symmetryCenter.x(), 0.0);
+				path.lineTo(m_symmetryCenter.x(), size.height());
+			}
+			if(m_symmetryMode == SymmetryMode::Horizontal ||
+			   m_symmetryMode == SymmetryMode::Both) {
+				path.moveTo(0.0, m_symmetryCenter.y());
+				path.lineTo(size.width(), m_symmetryCenter.y());
+			}
+		}
+	}
+	emit m_owner.pathPreviewRequested(path);
+}
+
+canvas::Point Freehand::symmetryPoint(
+	const canvas::Point &point, bool vertical, bool horizontal) const
+{
+	canvas::Point mirrored = point;
+	if(vertical) {
+		mirrored.setX(2.0 * m_symmetryCenter.x() - mirrored.x());
+		mirrored.setXtilt(-mirrored.xtilt());
+		mirrored.setRotation(M_PI - mirrored.rotation());
+	}
+	if(horizontal) {
+		mirrored.setY(2.0 * m_symmetryCenter.y() - mirrored.y());
+		mirrored.setYtilt(-mirrored.ytilt());
+		mirrored.setRotation(-mirrored.rotation());
+	}
+	return mirrored;
+}
+
 void Freehand::cancelStroke()
 {
-	m_strokeWorker.cancelStroke(QDateTime::currentMSecsSinceEpoch(), true);
+	long long timeMsec = QDateTime::currentMSecsSinceEpoch();
+	m_strokeWorker.cancelStroke(timeMsec, true);
+	if(m_verticalStrokeActive) {
+		m_verticalStrokeWorker.cancelStroke(timeMsec, true);
+	}
+	if(m_horizontalStrokeActive) {
+		m_horizontalStrokeWorker.cancelStroke(timeMsec, true);
+	}
+	if(m_bothStrokeActive) {
+		m_bothStrokeWorker.cancelStroke(timeMsec, true);
+	}
+	m_verticalStrokeActive = false;
+	m_horizontalStrokeActive = false;
+	m_bothStrokeActive = false;
 }
 
 void Freehand::pushMessage(DP_Message *rawMsg)
@@ -334,15 +585,25 @@ void Freehand::flushMessages()
 
 void Freehand::pollControl(bool enable)
 {
-	if(isOnMainThread()) {
+	auto update = [this, enable] {
 		if(enable) {
-			m_pollTimer.start();
+			++m_pollUsers;
+			if(m_pollUsers == 1) {
+				m_pollTimer.start();
+			}
 		} else {
-			m_pollTimer.stop();
+			m_pollUsers = qMax(0, m_pollUsers - 1);
+			if(m_pollUsers == 0) {
+				m_pollTimer.stop();
+			}
 		}
+	};
+
+	if(isOnMainThread()) {
+		update();
 	} else {
 		QMetaObject::invokeMethod(
-			&m_pollTimer, enable ? "start" : "stop",
+			&m_pollTimer, update,
 			m_cancelling ? Qt::QueuedConnection : Qt::BlockingQueuedConnection);
 	}
 }
@@ -351,11 +612,24 @@ void Freehand::poll()
 {
 	drawdance::CanvasState canvasState =
 		m_owner.model()->paintEngine()->sampleCanvasState();
-	m_strokeWorker.poll(QDateTime::currentMSecsSinceEpoch(), canvasState);
+	long long timeMsec = QDateTime::currentMSecsSinceEpoch();
+	m_strokeWorker.poll(timeMsec, canvasState);
 	m_strokeWorker.flushDabs();
+	if(m_verticalStrokeActive) {
+		m_verticalStrokeWorker.poll(timeMsec, canvasState);
+		m_verticalStrokeWorker.flushDabs();
+	}
+	if(m_horizontalStrokeActive) {
+		m_horizontalStrokeWorker.poll(timeMsec, canvasState);
+		m_horizontalStrokeWorker.flushDabs();
+	}
+	if(m_bothStrokeActive) {
+		m_bothStrokeWorker.poll(timeMsec, canvasState);
+		m_bothStrokeWorker.flushDabs();
+	}
 }
 
-DP_CanvasState *Freehand::sync()
+DP_CanvasState *Freehand::sync(DP_Semaphore *sem)
 {
 	if(isOnMainThread()) {
 		qWarning("Freehand::sync called on main thread");
@@ -364,21 +638,16 @@ DP_CanvasState *Freehand::sync()
 		return nullptr;
 	} else {
 		pushMessage(DP_msg_internal_paint_sync_new(
-			0, &Freehand::syncUnlockCallback, this));
-		DP_SEMAPHORE_MUST_WAIT(m_sem);
+			0, &Freehand::syncUnlockCallback, sem));
+		DP_SEMAPHORE_MUST_WAIT(sem);
 		return m_owner.model()->paintEngine()->sampleCanvasState().take();
 	}
 }
 
-void Freehand::syncUnlock()
-{
-	DP_SEMAPHORE_MUST_POST(m_sem);
-}
-
 void Freehand::syncUnlockCallback(void *user)
 {
-	Freehand *freehand = static_cast<Freehand *>(user);
-	freehand->syncUnlock();
+	DP_Semaphore *sem = static_cast<DP_Semaphore *>(user);
+	DP_SEMAPHORE_MUST_POST(sem);
 }
 
 bool Freehand::isOnMainThread()
@@ -410,6 +679,11 @@ void FreehandEraser::motion(const MotionParams &params)
 void FreehandEraser::hold(const MotionParams &params)
 {
 	m_freehand->hold(params);
+}
+
+void FreehandEraser::hover(const HoverParams &params)
+{
+	m_freehand->hover(params);
 }
 
 void FreehandEraser::end(const EndParams &params)

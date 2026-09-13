@@ -1,9 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "desktop/toolwidgets/toolsettings.h"
 #include "desktop/widgets/kis_slider_spin_box.h"
+#include "libclient/tools/freehand.h"
+#include "libclient/tools/toolcontroller.h"
 #include "libclient/tools/toolproperties.h"
 #include <QAbstractButton>
 #include <QButtonGroup>
+#include <QCheckBox>
+#include <QComboBox>
+#include <QGroupBox>
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QLayout>
+#include <QPushButton>
+#include <QVBoxLayout>
 #include <functional>
 
 namespace tools {
@@ -12,6 +22,60 @@ QWidget *ToolSettings::createUi(QWidget *parent)
 {
 	Q_ASSERT(!m_widget);
 	m_widget = createUiWidget(parent);
+
+	if(m_widget && m_widget->layout() && toolType() == QStringLiteral("brush")) {
+		Freehand *freehand =
+			static_cast<Freehand *>(m_ctrl->getTool(Tool::FREEHAND));
+		if(freehand) {
+			QGroupBox *group = new QGroupBox(tr("Symmetry"), m_widget);
+			QVBoxLayout *groupLayout = new QVBoxLayout(group);
+			QHBoxLayout *modeLayout = new QHBoxLayout;
+			QLabel *modeLabel = new QLabel(tr("Mode:"), group);
+			QComboBox *mode = new QComboBox(group);
+			mode->addItem(
+				tr("Off"), int(Freehand::SymmetryMode::Off));
+			mode->addItem(
+				tr("Vertical"), int(Freehand::SymmetryMode::Vertical));
+			mode->addItem(
+				tr("Horizontal"), int(Freehand::SymmetryMode::Horizontal));
+			mode->addItem(
+				tr("Both (4-way)"), int(Freehand::SymmetryMode::Both));
+			mode->setCurrentIndex(mode->findData(int(freehand->symmetryMode())));
+			modeLayout->addWidget(modeLabel);
+			modeLayout->addWidget(mode, 1);
+			groupLayout->addLayout(modeLayout);
+
+			QHBoxLayout *optionsLayout = new QHBoxLayout;
+			QPushButton *center = new QPushButton(tr("Set center here"), group);
+			center->setToolTip(tr(
+				"Move the cursor over the desired canvas position, then click this button."));
+			QCheckBox *guides = new QCheckBox(tr("Show guides"), group);
+			guides->setChecked(freehand->symmetryGuidesVisible());
+			optionsLayout->addWidget(center);
+			optionsLayout->addWidget(guides);
+			optionsLayout->addStretch(1);
+			groupLayout->addLayout(optionsLayout);
+
+			connect(
+				mode, QOverload<int>::of(&QComboBox::currentIndexChanged), this,
+				[freehand, mode](int index) {
+					freehand->setSymmetryMode(
+						static_cast<Freehand::SymmetryMode>(
+							mode->itemData(index).toInt()));
+				});
+			connect(center, &QPushButton::clicked, this, [freehand] {
+				freehand->setSymmetryCenterToCursor();
+			});
+			connect(
+				guides, &QCheckBox::toggled, this,
+				[freehand](bool checked) {
+					freehand->setSymmetryGuidesVisible(checked);
+				});
+
+			m_widget->layout()->addWidget(group);
+		}
+	}
+
 	return m_widget;
 }
 

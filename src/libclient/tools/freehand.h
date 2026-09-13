@@ -38,6 +38,8 @@ private:
 
 class Freehand final : public Tool, public SnapToPixelToggle {
 public:
+	enum class SymmetryMode : int { Off, Vertical, Horizontal, Both };
+
 	Freehand(ToolController &owner, DP_MaskSync *ms);
 	~Freehand() override;
 
@@ -45,6 +47,7 @@ public:
 	void beginStroke(const BeginParams &params, SnapToPixelToggle *target);
 	void motion(const MotionParams &params) override;
 	void hold(const MotionParams &params) override;
+	void hover(const HoverParams &params) override;
 	void end(const EndParams &params) override;
 
 	bool undoRedo(bool redo) override;
@@ -63,6 +66,12 @@ public:
 
 	void setSnapToPixel(bool snapToPixel) override;
 
+	void setSymmetryMode(SymmetryMode mode);
+	SymmetryMode symmetryMode() const { return m_symmetryMode; }
+	void setSymmetryCenterToCursor();
+	void setSymmetryGuidesVisible(bool visible);
+	bool symmetryGuidesVisible() const { return m_symmetryGuidesVisible; }
+
 private:
 	void strokeTo(const canvas::Point &point);
 	void cancelStroke();
@@ -70,17 +79,29 @@ private:
 	void flushMessages();
 	void pollControl(bool enable);
 	void poll();
-	DP_CanvasState *sync();
-	void syncUnlock();
+	DP_CanvasState *sync(DP_Semaphore *sem);
 	static void syncUnlockCallback(void *user);
+
+	void ensureSymmetryCenter();
+	void updateSymmetryGuide();
+	canvas::Point symmetryPoint(
+		const canvas::Point &point, bool vertical, bool horizontal) const;
+	void finishWorker(
+		drawdance::StrokeWorker &worker, DP_Semaphore *sem, bool wait);
 
 	static bool isOnMainThread();
 
 	QTimer m_pollTimer;
 	drawdance::StrokeWorker m_strokeWorker;
+	drawdance::StrokeWorker m_verticalStrokeWorker;
+	drawdance::StrokeWorker m_horizontalStrokeWorker;
+	drawdance::StrokeWorker m_bothStrokeWorker;
 	AntiOverflowSource m_antiOverflowSource;
 	DP_Mutex *m_mutex;
 	DP_Semaphore *m_sem;
+	DP_Semaphore *m_verticalSem;
+	DP_Semaphore *m_horizontalSem;
+	DP_Semaphore *m_bothSem;
 	net::MessageList m_messages;
 	net::MessageList m_outbox;
 	bool m_drawing = false;
@@ -91,6 +112,17 @@ private:
 	qreal m_zoom = 1.0;
 	qreal m_angle = 0.0;
 	QAtomicInt m_cancelling = 0;
+
+	SymmetryMode m_symmetryMode = SymmetryMode::Off;
+	QPointF m_symmetryCenter;
+	QPointF m_lastHoverPoint;
+	bool m_symmetryCenterInitialized = false;
+	bool m_haveHoverPoint = false;
+	bool m_symmetryGuidesVisible = true;
+	bool m_verticalStrokeActive = false;
+	bool m_horizontalStrokeActive = false;
+	bool m_bothStrokeActive = false;
+	int m_pollUsers = 0;
 };
 
 class FreehandEraser final : public Tool, public SnapToPixelToggle {
@@ -100,6 +132,7 @@ public:
 	void begin(const BeginParams &params) override;
 	void motion(const MotionParams &params) override;
 	void hold(const MotionParams &params) override;
+	void hover(const HoverParams &params) override;
 	void end(const EndParams &params) override;
 
 	bool undoRedo(bool redo) override;
