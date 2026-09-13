@@ -7,6 +7,8 @@
 
 #include <QColor>
 
+#include <cmath>
+
 namespace tools {
 
 namespace {
