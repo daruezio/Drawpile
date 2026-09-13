@@ -28,32 +28,12 @@
 namespace tools {
 
 namespace props {
-static const ToolProperties::Value<bool> antialias{
-	QStringLiteral("antialias"), false},
-	shrink{QStringLiteral("shrink"), false};
-static const ToolProperties::RangedValue<int> expand{
-	QStringLiteral("expand"), 0, 0, 100},
-	featherRadius{QStringLiteral("featherRadius"), 0, 0, 40},
-	size{QStringLiteral("limit"), 5000, 10, 5000},
-	opacity{QStringLiteral("opacity"), 100, 1, 100},
-	gap{QStringLiteral("gap"), 0, 0, 32},
-	source{QStringLiteral("source"), 2, 0, 2},
-	area{QStringLiteral("area"), 0, 0, 1},
-	kernel{QStringLiteral("kernel"), 0, 0, 1},
-	dragMode{QStringLiteral("dragmode"), 1, 0, 1},
-	stabilizer{QStringLiteral("stabilizer"), 0, 0, 1000},
-	smoothing{QStringLiteral("smoothing"), 0, 0, 20},
-	stabilizationMode{
-		QStringLiteral("stabilizationMode"), 0, 0,
-		int(brushes::LastStabilizationMode)};
-static const ToolProperties::RangedValue<double> tolerance{
-	QStringLiteral("tolerance"), 0.0, 0.0, 1.0};
+static const ToolProperties::Value<bool> antialias{QStringLiteral("antialias"), false}, shrink{QStringLiteral("shrink"), false};
+static const ToolProperties::RangedValue<int> expand{QStringLiteral("expand"), 0, 0, 100}, featherRadius{QStringLiteral("featherRadius"), 0, 0, 40}, size{QStringLiteral("limit"), 5000, 10, 5000}, opacity{QStringLiteral("opacity"), 100, 1, 100}, gap{QStringLiteral("gap"), 0, 0, 32}, source{QStringLiteral("source"), 2, 0, 2}, area{QStringLiteral("area"), 0, 0, 1}, kernel{QStringLiteral("kernel"), 0, 0, 1}, dragMode{QStringLiteral("dragmode"), 1, 0, 1}, stabilizer{QStringLiteral("stabilizer"), 0, 0, 1000}, smoothing{QStringLiteral("smoothing"), 0, 0, 20}, stabilizationMode{QStringLiteral("stabilizationMode"), 0, 0, int(brushes::LastStabilizationMode)};
+static const ToolProperties::RangedValue<double> tolerance{QStringLiteral("tolerance"), 0.0, 0.0, 1.0};
 }
 
-SelectionSettings::SelectionSettings(ToolController *ctrl, QObject *parent)
-	: ToolSettings(ctrl, parent)
-{
-}
+SelectionSettings::SelectionSettings(ToolController *ctrl, QObject *parent) : ToolSettings(ctrl, parent) {}
 
 void SelectionSettings::setActiveTool(tools::Tool::Type tool)
 {
@@ -72,15 +52,10 @@ ToolProperties SelectionSettings::saveToolSettings()
 {
 	ToolProperties cfg(toolType());
 	cfg.setValue(props::antialias, m_antiAliasCheckBox->isChecked());
-	cfg.setValue(
-		props::dragMode, int(m_dragModeCheckBox->isChecked()
-								 ? ToolController::SelectionDragMode::Move
-								 : ToolController::SelectionDragMode::Select));
+	cfg.setValue(props::dragMode, int(m_dragModeCheckBox->isChecked() ? ToolController::SelectionDragMode::Move : ToolController::SelectionDragMode::Select));
 	cfg.setValue(props::size, m_sizeSlider->value());
 	cfg.setValue(props::opacity, m_opacitySlider->value());
-	cfg.setValue(
-		props::tolerance,
-		m_toleranceSlider->value() / qreal(m_toleranceSlider->maximum()));
+	cfg.setValue(props::tolerance, m_toleranceSlider->value() / qreal(m_toleranceSlider->maximum()));
 	cfg.setValue(props::shrink, m_expandShrink->isShrink());
 	cfg.setValue(props::expand, m_expandShrink->spinnerValue());
 	cfg.setValue(props::kernel, m_expandShrink->kernel());
@@ -97,13 +72,10 @@ ToolProperties SelectionSettings::saveToolSettings()
 void SelectionSettings::restoreToolSettings(const ToolProperties &cfg)
 {
 	m_antiAliasCheckBox->setChecked(cfg.value(props::antialias));
-	m_dragModeCheckBox->setChecked(
-		cfg.value(props::dragMode) !=
-		int(ToolController::SelectionDragMode::Select));
+	m_dragModeCheckBox->setChecked(cfg.value(props::dragMode) != int(ToolController::SelectionDragMode::Select));
 	m_sizeSlider->setValue(cfg.value(props::size));
 	m_opacitySlider->setValue(cfg.value(props::opacity));
-	m_toleranceSlider->setValue(
-		cfg.value(props::tolerance) * m_toleranceSlider->maximum());
+	m_toleranceSlider->setValue(cfg.value(props::tolerance) * m_toleranceSlider->maximum());
 	m_expandShrink->setSpinnerValue(cfg.value(props::expand));
 	m_expandShrink->setShrink(cfg.value(props::shrink));
 	m_expandShrink->setKernel(cfg.value(props::kernel));
@@ -126,19 +98,12 @@ void SelectionSettings::restoreToolSettings(const ToolProperties &cfg)
 
 void SelectionSettings::stepAdjust1(bool increase)
 {
-	if(m_isMagicWand) {
-		m_sizeSlider->setValue(stepLogarithmic(
-			m_sizeSlider->minimum(), m_sizeSlider->maximum(),
-			m_sizeSlider->value(), increase));
-	}
+	if(m_isMagicWand) m_sizeSlider->setValue(stepLogarithmic(m_sizeSlider->minimum(), m_sizeSlider->maximum(), m_sizeSlider->value(), increase));
 }
 
 void SelectionSettings::stepAdjust2(bool increase)
 {
-	if(m_isMagicWand) {
-		m_opacitySlider->setValue(
-			m_opacitySlider->value() + (increase ? 1 : -1));
-	}
+	if(m_isMagicWand) m_opacitySlider->setValue(m_opacitySlider->value() + (increase ? 1 : -1));
 }
 
 int SelectionSettings::getSize() const
@@ -146,9 +111,8 @@ int SelectionSettings::getSize() const
 	if(m_isMagicWand) {
 		int size = m_sizeSlider->value();
 		return calculatePixelSize(size, isSizeUnlimited(size));
-	} else {
-		return 0;
 	}
+	return 0;
 }
 
 void SelectionSettings::setAction(QAction *starttransform)
@@ -158,9 +122,7 @@ void SelectionSettings::setAction(QAction *starttransform)
 	m_startTransformButton->setText(starttransform->text());
 	m_startTransformButton->setStatusTip(starttransform->statusTip());
 	m_startTransformButton->setToolTip(starttransform->statusTip());
-	connect(
-		m_startTransformButton, &QPushButton::clicked, starttransform,
-		&QAction::trigger);
+	connect(m_startTransformButton, &QPushButton::clicked, starttransform, &QAction::trigger);
 }
 
 void SelectionSettings::setActionEnabled(bool enabled)
@@ -173,10 +135,7 @@ void SelectionSettings::pushSettings()
 {
 	ToolController::SelectionParams selectionParams;
 	selectionParams.antiAlias = m_antiAliasCheckBox->isChecked();
-	selectionParams.dragMode =
-		int(m_dragModeCheckBox->isChecked()
-				? ToolController::SelectionDragMode::Move
-				: ToolController::SelectionDragMode::Select);
+	selectionParams.dragMode = int(m_dragModeCheckBox->isChecked() ? ToolController::SelectionDragMode::Move : ToolController::SelectionDragMode::Select);
 	selectionParams.defaultOp = m_headerGroup->checkedId();
 	int size = m_sizeSlider->value();
 	selectionParams.size = isSizeUnlimited(size) ? -1 : size;
@@ -193,13 +152,9 @@ void SelectionSettings::pushSettings()
 	ToolController *ctrl = controller();
 	ctrl->setSelectionParams(selectionParams);
 	if(ctrl->activeTool() == Tool::POLYGONSELECTION) {
-		static_cast<PolygonSelection *>(ctrl->getTool(Tool::POLYGONSELECTION))
-			->setStabilizationParams(
-				getCurrentStabilizationMode(), m_stabilizerSpinner->value(),
-				m_smoothingSpinner->value());
+		static_cast<PolygonSelection *>(ctrl->getTool(Tool::POLYGONSELECTION))->setStabilizationParams(getCurrentStabilizationMode(), m_stabilizerSpinner->value(), m_smoothingSpinner->value());
 	} else if(ctrl->activeTool() == Tool::MAGICWAND) {
-		static_cast<MagicWandTool *>(ctrl->getTool(Tool::MAGICWAND))
-			->updateParameters();
+		static_cast<MagicWandTool *>(ctrl->getTool(Tool::MAGICWAND))->updateParameters();
 	}
 }
 
@@ -207,14 +162,12 @@ QWidget *SelectionSettings::createUiWidget(QWidget *parent)
 {
 	m_headerWidget = new QWidget(parent);
 	m_headerGroup = new QButtonGroup(m_headerWidget);
-
 	QHBoxLayout *headerLayout = new QHBoxLayout(m_headerWidget);
 	headerLayout->setContentsMargins(0, 0, 0, 0);
 	headerLayout->setSpacing(0);
 	headerLayout->addStretch(1);
 
-	widgets::GroupedToolButton *replaceButton =
-		new widgets::GroupedToolButton(widgets::GroupedToolButton::GroupLeft);
+	widgets::GroupedToolButton *replaceButton = new widgets::GroupedToolButton(widgets::GroupedToolButton::GroupLeft);
 	replaceButton->setIcon(QIcon::fromTheme("drawpile_selection_replace"));
 	replaceButton->setStatusTip(tr("Replace selection"));
 	replaceButton->setToolTip(replaceButton->statusTip());
@@ -223,8 +176,7 @@ QWidget *SelectionSettings::createUiWidget(QWidget *parent)
 	headerLayout->addWidget(replaceButton, 3);
 	m_headerGroup->addButton(replaceButton, DP_MSG_SELECTION_PUT_OP_REPLACE);
 
-	widgets::GroupedToolButton *uniteButton =
-		new widgets::GroupedToolButton(widgets::GroupedToolButton::GroupCenter);
+	widgets::GroupedToolButton *uniteButton = new widgets::GroupedToolButton(widgets::GroupedToolButton::GroupCenter);
 	uniteButton->setIcon(QIcon::fromTheme("drawpile_selection_unite"));
 	uniteButton->setStatusTip(tr("Add to selection"));
 	uniteButton->setToolTip(uniteButton->statusTip());
@@ -232,8 +184,7 @@ QWidget *SelectionSettings::createUiWidget(QWidget *parent)
 	headerLayout->addWidget(uniteButton, 3);
 	m_headerGroup->addButton(uniteButton, DP_MSG_SELECTION_PUT_OP_UNITE);
 
-	widgets::GroupedToolButton *intersectButton =
-		new widgets::GroupedToolButton(widgets::GroupedToolButton::GroupCenter);
+	widgets::GroupedToolButton *intersectButton = new widgets::GroupedToolButton(widgets::GroupedToolButton::GroupCenter);
 	intersectButton->setIcon(QIcon::fromTheme("drawpile_selection_intersect"));
 	intersectButton->setStatusTip(tr("Intersect with selection"));
 	intersectButton->setToolTip(intersectButton->statusTip());
@@ -241,8 +192,7 @@ QWidget *SelectionSettings::createUiWidget(QWidget *parent)
 	headerLayout->addWidget(intersectButton, 3);
 	m_headerGroup->addButton(intersectButton, DP_MSG_SELECTION_PUT_OP_INTERSECT);
 
-	widgets::GroupedToolButton *excludeButton =
-		new widgets::GroupedToolButton(widgets::GroupedToolButton::GroupRight);
+	widgets::GroupedToolButton *excludeButton = new widgets::GroupedToolButton(widgets::GroupedToolButton::GroupRight);
 	excludeButton->setIcon(QIcon::fromTheme("drawpile_selection_exclude"));
 	excludeButton->setStatusTip(tr("Remove from selection"));
 	excludeButton->setToolTip(excludeButton->statusTip());
@@ -250,10 +200,7 @@ QWidget *SelectionSettings::createUiWidget(QWidget *parent)
 	headerLayout->addWidget(excludeButton, 3);
 	m_headerGroup->addButton(excludeButton, DP_MSG_SELECTION_PUT_OP_EXCLUDE);
 	headerLayout->addStretch(1);
-	connect(
-		m_headerGroup,
-		QOverload<QAbstractButton *>::of(&QButtonGroup::buttonClicked), this,
-		&SelectionSettings::pushSettings);
+	connect(m_headerGroup, QOverload<QAbstractButton *>::of(&QButtonGroup::buttonClicked), this, &SelectionSettings::pushSettings);
 
 	QWidget *widget = new QWidget(parent);
 	QVBoxLayout *layout = new QVBoxLayout(widget);
@@ -270,7 +217,6 @@ QWidget *SelectionSettings::createUiWidget(QWidget *parent)
 	QHBoxLayout *stabilizerLayout = new QHBoxLayout(m_stabilizationContainer);
 	stabilizerLayout->setContentsMargins(0, 0, 0, 0);
 	selectionLayout->addWidget(m_stabilizationContainer);
-
 	m_stabilizerSpinner = new KisSliderSpinBox;
 	m_stabilizerSpinner->setRange(0, 1000);
 	m_stabilizerSpinner->setExponentRatio(3.0);
@@ -279,7 +225,6 @@ QWidget *SelectionSettings::createUiWidget(QWidget *parent)
 	m_stabilizerSpinner->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 	stabilizerLayout->addWidget(m_stabilizerSpinner);
 	connect(m_stabilizerSpinner, QOverload<int>::of(&KisSliderSpinBox::valueChanged), this, &SelectionSettings::pushSettings);
-
 	m_smoothingSpinner = new KisSliderSpinBox;
 	m_smoothingSpinner->setRange(0, 20);
 	m_smoothingSpinner->setBlockUpdateSignalOnDrag(true);
@@ -288,14 +233,12 @@ QWidget *SelectionSettings::createUiWidget(QWidget *parent)
 	m_smoothingSpinner->hide();
 	stabilizerLayout->addWidget(m_smoothingSpinner);
 	connect(m_smoothingSpinner, QOverload<int>::of(&KisSliderSpinBox::valueChanged), this, &SelectionSettings::pushSettings);
-
 	m_stabilizerButton = new widgets::GroupedToolButton(widgets::GroupedToolButton::NotGrouped);
 	m_stabilizerButton->setIcon(QIcon::fromTheme("application-menu"));
 	m_stabilizerButton->setPopupMode(QToolButton::InstantPopup);
 	m_stabilizerButton->setStatusTip(QCoreApplication::translate("tools::LassoFillSettings", "Stabilization mode"));
 	m_stabilizerButton->setToolTip(m_stabilizerButton->statusTip());
 	stabilizerLayout->addWidget(m_stabilizerButton);
-
 	QMenu *stabilizerMenu = new QMenu(m_stabilizerButton);
 	m_stabilizerButton->setMenu(stabilizerMenu);
 	m_stabilizationModeGroup = new QActionGroup(stabilizerMenu);
@@ -327,8 +270,8 @@ QWidget *SelectionSettings::createUiWidget(QWidget *parent)
 	modeLayout->addWidget(m_selectionModeCombo, 1);
 	selectionLayout->addLayout(modeLayout);
 	connect(m_selectionModeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged), this, [this](int index) {
-		if(auto *tool = qobject_cast<PolygonSelection *>(controller()->getTool(Tool::POLYGONSELECTION))) {
-			tool->setFreehandMode(index == 0);
+		if(controller()->getTool(Tool::POLYGONSELECTION)) {
+			static_cast<PolygonSelection *>(controller()->getTool(Tool::POLYGONSELECTION))->setFreehandMode(index == 0);
 		}
 	});
 
@@ -337,7 +280,6 @@ QWidget *SelectionSettings::createUiWidget(QWidget *parent)
 	m_antiAliasCheckBox->setToolTip(m_antiAliasCheckBox->statusTip());
 	connect(m_antiAliasCheckBox, &QCheckBox::clicked, this, &SelectionSettings::pushSettings);
 	selectionLayout->addWidget(m_antiAliasCheckBox);
-
 	m_dragModeCheckBox = new QCheckBox(tr("Drag to move"));
 	m_dragModeCheckBox->setStatusTip(tr("Allow dragging the selection for a quick move operation."));
 	connect(m_dragModeCheckBox, &QCheckBox::clicked, this, &SelectionSettings::pushSettings);
@@ -348,7 +290,6 @@ QWidget *SelectionSettings::createUiWidget(QWidget *parent)
 	magicWandLayout->setContentsMargins(0, 0, 0, 0);
 	magicWandLayout->setSpacing(3);
 	layout->addWidget(m_magicWandContainer);
-
 	m_sizeSlider = new KisSliderSpinBox;
 	m_sizeSlider->setRange(props::size.min, props::size.max);
 	m_sizeSlider->setPrefix(QCoreApplication::translate("FillSettings", "Size Limit: "));
@@ -357,7 +298,6 @@ QWidget *SelectionSettings::createUiWidget(QWidget *parent)
 	connect(m_sizeSlider, QOverload<int>::of(&KisSliderSpinBox::valueChanged), this, &SelectionSettings::pushSettings);
 	connect(m_sizeSlider, QOverload<int>::of(&KisSliderSpinBox::valueChanged), this, &SelectionSettings::updateSize);
 	magicWandLayout->addRow(m_sizeSlider);
-
 	m_opacitySlider = new KisSliderSpinBox;
 	m_opacitySlider->setRange(props::opacity.min, props::opacity.max);
 	m_opacitySlider->setPrefix(QCoreApplication::translate("FillSettings", "Opacity: "));
@@ -365,14 +305,12 @@ QWidget *SelectionSettings::createUiWidget(QWidget *parent)
 	m_opacitySlider->setBlockUpdateSignalOnDrag(true);
 	connect(m_opacitySlider, QOverload<int>::of(&KisSliderSpinBox::valueChanged), this, &SelectionSettings::pushSettings);
 	magicWandLayout->addRow(m_opacitySlider);
-
 	m_toleranceSlider = new KisSliderSpinBox;
 	m_toleranceSlider->setRange(0, 255);
 	m_toleranceSlider->setPrefix(QCoreApplication::translate("FillSettings", "Tolerance: "));
 	m_toleranceSlider->setBlockUpdateSignalOnDrag(true);
 	connect(m_toleranceSlider, QOverload<int>::of(&KisSliderSpinBox::valueChanged), this, &SelectionSettings::updateTolerance);
 	magicWandLayout->addRow(m_toleranceSlider);
-
 	m_expandShrink = new widgets::ExpandShrinkSpinner;
 	m_expandShrink->setSpinnerRange(props::expand.min, props::expand.max);
 	m_expandShrink->setBlockUpdateSignalOnDrag(true);
@@ -380,7 +318,6 @@ QWidget *SelectionSettings::createUiWidget(QWidget *parent)
 	connect(m_expandShrink, &widgets::ExpandShrinkSpinner::shrinkChanged, this, &SelectionSettings::pushSettings);
 	connect(m_expandShrink, &widgets::ExpandShrinkSpinner::kernelChanged, this, &SelectionSettings::pushSettings);
 	magicWandLayout->addRow(m_expandShrink);
-
 	m_featherSlider = new KisSliderSpinBox;
 	m_featherSlider->setRange(0, 40);
 	m_featherSlider->setPrefix(QCoreApplication::translate("FillSettings", "Feather: "));
@@ -388,7 +325,6 @@ QWidget *SelectionSettings::createUiWidget(QWidget *parent)
 	m_featherSlider->setBlockUpdateSignalOnDrag(true);
 	connect(m_featherSlider, QOverload<int>::of(&KisSliderSpinBox::valueChanged), this, &SelectionSettings::pushSettings);
 	magicWandLayout->addRow(m_featherSlider);
-
 	m_closeGapsSlider = new KisSliderSpinBox;
 	m_closeGapsSlider->setRange(0, 40);
 	m_closeGapsSlider->setPrefix(QCoreApplication::translate("FillSettings", "Close Gaps: "));
@@ -402,7 +338,6 @@ QWidget *SelectionSettings::createUiWidget(QWidget *parent)
 	QHBoxLayout *sourceLayout = new QHBoxLayout;
 	sourceLayout->setContentsMargins(0, 0, 0, 0);
 	sourceLayout->setSpacing(0);
-
 	widgets::GroupedToolButton *sourceMergedButton = new widgets::GroupedToolButton(widgets::GroupedToolButton::GroupLeft);
 	sourceMergedButton->setIcon(QIcon::fromTheme("arrow-down-double"));
 	sourceMergedButton->setStatusTip(QCoreApplication::translate("FillSettings", "Merged image"));
@@ -411,7 +346,6 @@ QWidget *SelectionSettings::createUiWidget(QWidget *parent)
 	sourceMergedButton->setChecked(true);
 	m_sourceGroup->addButton(sourceMergedButton, int(ToolController::SelectionSource::Merged));
 	sourceLayout->addWidget(sourceMergedButton);
-
 	widgets::GroupedToolButton *sourceMergedWithoutBackgroundButton = new widgets::GroupedToolButton(widgets::GroupedToolButton::GroupCenter);
 	sourceMergedWithoutBackgroundButton->setIcon(QIcon::fromTheme("arrow-down"));
 	sourceMergedWithoutBackgroundButton->setStatusTip(QCoreApplication::translate("FillSettings", "Merged without background"));
@@ -419,7 +353,6 @@ QWidget *SelectionSettings::createUiWidget(QWidget *parent)
 	sourceMergedWithoutBackgroundButton->setCheckable(true);
 	m_sourceGroup->addButton(sourceMergedWithoutBackgroundButton, int(ToolController::SelectionSource::MergedWithoutBackground));
 	sourceLayout->addWidget(sourceMergedWithoutBackgroundButton);
-
 	widgets::GroupedToolButton *sourceLayerButton = new widgets::GroupedToolButton(widgets::GroupedToolButton::GroupRight);
 	sourceLayerButton->setIcon(QIcon::fromTheme("layer-visible-on"));
 	sourceLayerButton->setStatusTip(QCoreApplication::translate("FillSettings", "Current layer"));
@@ -427,7 +360,6 @@ QWidget *SelectionSettings::createUiWidget(QWidget *parent)
 	sourceLayerButton->setCheckable(true);
 	m_sourceGroup->addButton(sourceLayerButton, int(ToolController::SelectionSource::Layer));
 	sourceLayout->addWidget(sourceLayerButton);
-
 	QComboBox *m_sourceDummyCombo = new QComboBox;
 	m_sourceDummyCombo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 	utils::setWidgetRetainSizeWhenHidden(m_sourceDummyCombo, true);
@@ -440,7 +372,6 @@ QWidget *SelectionSettings::createUiWidget(QWidget *parent)
 	QHBoxLayout *areaLayout = new QHBoxLayout;
 	areaLayout->setContentsMargins(0, 0, 0, 0);
 	areaLayout->setSpacing(0);
-
 	widgets::GroupedToolButton *areaContinuousButton = new widgets::GroupedToolButton(widgets::GroupedToolButton::GroupLeft);
 	areaContinuousButton->setIcon(QIcon::fromTheme("fill-color"));
 	areaContinuousButton->setStatusTip(tr("Select continuous area"));
@@ -449,7 +380,6 @@ QWidget *SelectionSettings::createUiWidget(QWidget *parent)
 	areaContinuousButton->setChecked(true);
 	m_areaGroup->addButton(areaContinuousButton, int(Area::Continuous));
 	areaLayout->addWidget(areaContinuousButton);
-
 	widgets::GroupedToolButton *areaSimilarButton = new widgets::GroupedToolButton(widgets::GroupedToolButton::GroupRight);
 	areaSimilarButton->setIcon(QIcon::fromTheme("color-picker"));
 	areaSimilarButton->setStatusTip(tr("Select similar color"));
@@ -457,7 +387,6 @@ QWidget *SelectionSettings::createUiWidget(QWidget *parent)
 	areaSimilarButton->setCheckable(true);
 	m_areaGroup->addButton(areaSimilarButton, int(Area::Similar));
 	areaLayout->addWidget(areaSimilarButton);
-
 	QComboBox *m_areaDummyCombo = new QComboBox;
 	m_areaDummyCombo->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
 	utils::setWidgetRetainSizeWhenHidden(m_areaDummyCombo, true);
@@ -478,16 +407,13 @@ QWidget *SelectionSettings::createUiWidget(QWidget *parent)
 void SelectionSettings::updateSize(int size)
 {
 	bool unlimited = isSizeUnlimited(size);
-	m_sizeSlider->setOverrideText(
-		unlimited ? QCoreApplication::translate("FillSettings", "Size Limit: Unlimited") : QString());
+	m_sizeSlider->setOverrideText(unlimited ? QCoreApplication::translate("FillSettings", "Size Limit: Unlimited") : QString());
 	emit pixelSizeChanged(calculatePixelSize(size, unlimited));
 }
 
 void SelectionSettings::updateTolerance()
 {
-	if(m_toleranceBeforeDrag < 0) {
-		pushSettings();
-	}
+	if(m_toleranceBeforeDrag < 0) pushSettings();
 }
 
 bool SelectionSettings::isSizeUnlimited(int size)
@@ -503,9 +429,7 @@ int SelectionSettings::calculatePixelSize(int size, bool unlimited)
 void SelectionSettings::setDragState(bool dragging, int tolerance)
 {
 	if(dragging) {
-		if(m_toleranceBeforeDrag < 0) {
-			m_toleranceBeforeDrag = m_toleranceSlider->value();
-		}
+		if(m_toleranceBeforeDrag < 0) m_toleranceBeforeDrag = m_toleranceSlider->value();
 		m_toleranceSlider->setValue(tolerance);
 	} else if(m_toleranceBeforeDrag >= 0) {
 		m_toleranceSlider->setValue(m_toleranceBeforeDrag);
@@ -529,11 +453,7 @@ void SelectionSettings::updateStabilizationMode(QAction *action)
 
 int SelectionSettings::getCurrentStabilizationMode() const
 {
-	if(m_smoothingAction->isChecked()) {
-		return int(brushes::Smoothing);
-	} else {
-		return int(brushes::Stabilizer);
-	}
+	return m_smoothingAction->isChecked() ? int(brushes::Smoothing) : int(brushes::Stabilizer);
 }
 
 }
