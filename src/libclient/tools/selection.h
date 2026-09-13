@@ -22,8 +22,8 @@ class SelectionTool : public Tool {
 public:
 	SelectionTool(ToolController &owner, Type type, QCursor cursor);
 
-	void begin(const BeginParams &params) final override;
-	void motion(const MotionParams &params) final override;
+	void begin(const BeginParams &params) override;
+	void motion(const MotionParams &params) override;
 	void modify(const ModifyParams &params) final override;
 	void hover(const HoverParams &params) final override;
 	void end(const EndParams &params) override;
@@ -130,7 +130,7 @@ private:
 	int m_stabilizationMode = 0;
 	int m_stabilizerSampleCount = 0;
 	int m_smoothing = 0;
-	bool m_freehandMode = false;
+	bool m_freehandMode = true;
 };
 
 }
