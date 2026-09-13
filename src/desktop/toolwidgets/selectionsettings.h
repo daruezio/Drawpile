@@ -77,6 +77,7 @@ private:
 	QButtonGroup *m_headerGroup = nullptr;
 	QWidget *m_selectionContainer = nullptr;
 	QWidget *m_stabilizationContainer = nullptr;
+	QComboBox *m_selectionModeCombo = nullptr;
 	KisSliderSpinBox *m_stabilizerSpinner = nullptr;
 	KisSliderSpinBox *m_smoothingSpinner = nullptr;
 	widgets::GroupedToolButton *m_stabilizerButton = nullptr;
