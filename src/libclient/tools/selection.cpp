@@ -395,6 +395,11 @@ PolygonSelection::PolygonSelection(ToolController &owner)
 
 void PolygonSelection::begin(const BeginParams &params)
 {
+	if(m_freehandMode) {
+		SelectionTool::begin(params);
+		return;
+	}
+
 	if(!isMultipart()) {
 		SelectionTool::begin(params);
 		return;
@@ -408,6 +413,11 @@ void PolygonSelection::begin(const BeginParams &params)
 
 void PolygonSelection::motion(const MotionParams &params)
 {
+	if(m_freehandMode) {
+		SelectionTool::motion(params);
+		return;
+	}
+
 	if(!isMultipart()) {
 		return;
 	}
@@ -419,6 +429,11 @@ void PolygonSelection::motion(const MotionParams &params)
 
 void PolygonSelection::end(const EndParams &params)
 {
+	if(m_freehandMode) {
+		SelectionTool::end(params);
+		return;
+	}
+
 	Q_UNUSED(params);
 	if(!isMultipart()) {
 		return;
@@ -462,6 +477,12 @@ void PolygonSelection::beginSelection(const canvas::Point &point)
 
 void PolygonSelection::continueSelection(const canvas::Point &point)
 {
+	if(m_freehandMode) {
+		addPoint(QPointF(point.x(), point.y()));
+		m_cursorPoint = QPointF(point.x(), point.y());
+		return;
+	}
+
 	m_cursorPoint = QPointF(point.x(), point.y());
 	updatePolygonSelectionPreview();
 }
@@ -481,6 +502,7 @@ void PolygonSelection::cancelSelection()
 {
 	m_polygon.clear();
 	m_polygonF.clear();
+	m_cursorPoint = QPointF();
 	removeSelectionPreview();
 	emit m_owner.statusTextRequested(QString());
 }
@@ -552,7 +574,7 @@ void PolygonSelection::updatePolygonSelectionPreview()
 			for(int i = 1; i < m_polygonF.size(); ++i) {
 				path.lineTo(m_polygonF.at(i));
 			}
-			if(!m_cursorPoint.isNull()) {
+			if(!m_freehandMode && !m_cursorPoint.isNull()) {
 				path.lineTo(m_cursorPoint);
 			}
 		}
@@ -562,7 +584,7 @@ void PolygonSelection::updatePolygonSelectionPreview()
 			for(int i = 1; i < m_polygon.size(); ++i) {
 				path.lineTo(m_polygon.at(i));
 			}
-			if(!m_cursorPoint.isNull()) {
+			if(!m_freehandMode && !m_cursorPoint.isNull()) {
 				path.lineTo(m_cursorPoint);
 			}
 		}
