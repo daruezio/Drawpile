@@ -2,6 +2,7 @@
 #ifndef TOOLS_LASER_H
 #define TOOLS_LASER_H
 #include "libclient/tools/tool.h"
+#include <QElapsedTimer>
 
 namespace tools {
 
@@ -18,6 +19,8 @@ public:
 private:
 	int m_persistence = 1;
 	bool m_drawing = false;
+	QElapsedTimer m_rainbowTimer;
+	qint64 m_lastRainbowUpdate = 0;
 };
 
 }
